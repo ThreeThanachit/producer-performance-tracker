@@ -12,7 +12,7 @@ Built to replace 6 months of vibes-based "ดุลพินิจ" with evidenc
 - 📊 **APPEND-ONLY Master Log** — zero data loss guarantee, even on daily 7am rebuild triggers
 - 📱 **Mobile Web App** — Senior Producers fill Pass/Fail on mobile (no more "เปิดคอมไม่สะดวก")
 - 🔄 **Race-safe sync** — desktop Sheet + mobile WebApp + auto-triggers all write to the same source without conflict
-- 👥 **Producer → Senior auto-assignment** — new sessions get assigned Senior PIC automatically based on a mapping table
+- 👥 **Flexible Senior PIC** — Senior chooses each session manually (one Producer can be reviewed by multiple Seniors)
 - 📈 **Weekly / Monthly dashboards** — leaderboards, heatmaps, trend comparison, Senior accountability
 - 🏆 **Producer scorecards** — individual history snapshots for promotion decisions
 - 🌐 **Performance Dashboard** — separate Apps Script web app with 8 interactive views (GMV/CTR/funnel)
@@ -107,8 +107,7 @@ Built to replace 6 months of vibes-based "ดุลพินิจ" with evidenc
 3. **Save** (Ctrl+S)
 4. **Setup triggers** — open the sheet → menu `📊 Session Builder` → `⚙️ ตั้ง Triggers ทั้งหมด`
 5. **Build initial Master Log** — menu → `▶ 1. Build Sessions` → `📋 2. Build Master Log + Views`
-6. **Setup Producer assignments** — menu → `👥 Setup Producer → Senior assignments` → fill `Producer Assignments` tab
-7. **Deploy WebApp** — Apps Script → Deploy → New deployment → Web app
+6. **Deploy WebApp** (optional, mobile UI) — Apps Script → Deploy → New deployment → Web app
    - Execute as: **Me**
    - Who has access: **Anyone in your organization**
    - Copy URL → share to Senior Producers' phones (Add to Home Screen)
@@ -144,14 +143,8 @@ syncCellToMasterLog_(sheet, row, col, newValue);
 // if Today=N/A and ML=Pass/Fail → keep ML (don't overwrite WebApp's edits)
 ```
 
-### Producer → Senior Auto-Assignment
-A `Producer Assignments` tab maps each Producer to a default Senior PIC. When new sessions append to Master Log, column E auto-fills.
-
-| Producer | Senior PIC |
-|---|---|
-| Ben | Peet |
-| Boss | Mink |
-| Praii | Nine |
+### Senior PIC Workflow
+Senior PIC column starts empty for new sessions. Each Senior fills their own column when they evaluate a session via the Today tab. Multiple Seniors can review the same Producer's different sessions.
 
 ---
 
@@ -207,7 +200,7 @@ node test-tracker.mjs
 - ✅ Phase 3 — Sheet-based Insights tabs
 - ✅ Phase 4 — Performance Dashboard Web App
 - ✅ Phase 5 — Mobile WebApp for data entry
-- ✅ Phase 6 — Producer→Senior auto-assignment
+- ✅ Phase 6 — Master Log deduplication tool
 - 🟡 Phase 7 — Inter-rater reliability checks
 - 🔵 Phase 8 — Voice input via Whisper + GPT (low-friction)
 - 🔵 Phase 9 — Backend caching (CacheService, 5min TTL)

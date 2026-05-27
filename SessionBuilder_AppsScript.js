@@ -52,7 +52,6 @@ function onOpen() {
     .addItem('📋 2. Build Master Log + Views',           'buildAllTabs')
     .addItem('🔄 Refresh Today & Overdue views',         'refreshViews')
     .addItem('💾 Sync Today → Master Log',               'syncTodayToMasterLog')
-    .addItem('👥 Setup Producer → Senior assignments',   'buildProducerAssignments')
     .addItem('🧹 Dedup Master Log (ลบ session ซ้ำ)',     'dedupMasterLog')
     .addSeparator()
     .addItem('📊 Build Weekly Dashboard',    'buildWeeklyDashboard')
@@ -102,12 +101,24 @@ function uiAlert(msg) {
   try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* trigger context — no UI, skip */ }
 }
 
-// BUG FIX #2: sheet.clear() ไม่ลบ Filter — ต้องลบก่อนเสมอ
-// ไม่งั้นจะ error "You can't create a filter in a sheet that already has a filter"
+// BUG FIX: sheet.clear() ไม่ลบ Filter / Merged cells / CF rules
+// ต้องลบทั้งหมดก่อนเสมอ ไม่งั้น setValues จะ silent fail บน merged area
 function sheetClearAll(sheet) {
+  // 1. Remove filter (เพื่อไม่ให้ error "already has a filter" ตอน createFilter ใหม่)
   var f = sheet.getFilter();
   if (f) f.remove();
+
+  // 2. Break ALL merged cells (sheet.clear() ไม่ทำ — ค้างไว้ทำให้ setValues เพี้ยน)
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow > 0 && lastCol > 0) {
+    sheet.getRange(1, 1, lastRow, lastCol).breakApart();
+  }
+
+  // 3. Clear content + formatting
   sheet.clear();
+
+  // 4. Remove conditional formatting rules
   var rules = sheet.getConditionalFormatRules();
   if (rules.length) sheet.setConditionalFormatRules([]);
 }
@@ -519,78 +530,6 @@ function isOnOrAfter(y, m, d, sy, sm, sd) {
   if (y !== sy) return y > sy;
   if (m !== sm) return m > sm;
   return d >= sd;
-}
-
-
-// ============================================================
-//  PRODUCER ASSIGNMENTS — Map Producer → Senior PIC
-//
-//  Tab "Producer Assignments" (auto-created):
-//    A=Producer | B=Senior PIC
-//
-//  ใช้ตอน append session ใหม่ → auto-fill Senior PIC column E
-//  ถ้า Producer ไม่อยู่ใน mapping → ปล่อย Senior ว่าง (กรอกทีหลัง)
-// ============================================================
-var ASSIGNMENTS_TAB = 'Producer Assignments';
-
-function getProducerAssignments_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(ASSIGNMENTS_TAB);
-  if (!sh) {
-    sh = ss.insertSheet(ASSIGNMENTS_TAB);
-    sh.getRange(1, 1, 1, 2).setValues([['Producer', 'Senior PIC']])
-      .setBackground('#1A1A1A').setFontColor('#FFFFFF').setFontWeight('bold');
-    sh.setColumnWidth(1, 130);
-    sh.setColumnWidth(2, 110);
-    sh.setFrozenRows(1);
-    // dropdown สำหรับ Senior column
-    var dv = SpreadsheetApp.newDataValidation()
-      .requireValueInList(SENIOR_PRODUCERS, true).setAllowInvalid(false).build();
-    sh.getRange(2, 2, 500, 1).setDataValidation(dv);
-    return {}; // ครั้งแรกยังว่าง
-  }
-  var data = sh.getDataRange().getValues();
-  var map = {};
-  for (var i = 1; i < data.length; i++) {
-    var prod = (data[i][0] || '').toString().trim();
-    var sen  = (data[i][1] || '').toString().trim();
-    if (prod && sen) map[prod] = sen;
-  }
-  return map;
-}
-
-// Menu helper — สร้าง Assignments tab + populate ด้วย producer list จาก ML
-function buildProducerAssignments() {
-  var assignments = getProducerAssignments_(); // ensures tab exists
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var ml = ss.getSheetByName(MASTER_LOG_NAME);
-  if (!ml) { uiAlert('❌ ไม่พบ Master Log'); return; }
-
-  // หา producer ที่ยังไม่อยู่ใน mapping
-  var data = ml.getDataRange().getValues();
-  var seen = {};
-  for (var i = 2; i < data.length; i++) {
-    var p = (data[i][2] || '').toString().trim();
-    if (!p) continue;
-    if (EXCLUDED_PRODUCERS.indexOf(p) > -1) continue;
-    seen[p] = true;
-  }
-  var missing = Object.keys(seen).filter(function(p){ return !assignments[p]; }).sort();
-
-  if (missing.length === 0) {
-    uiAlert('✅ Producer ทุกคนมี Senior PIC แล้ว (' + Object.keys(assignments).length + ' assignments)');
-    return;
-  }
-
-  var sh = ss.getSheetByName(ASSIGNMENTS_TAB);
-  var lastRow = sh.getLastRow();
-  var rows = missing.map(function(p){ return [p, '']; });
-  sh.getRange(lastRow + 1, 1, rows.length, 2).setValues(rows);
-  uiAlert(
-    '✅ เพิ่ม Producer ใน Tab "' + ASSIGNMENTS_TAB + '":\n' +
-    missing.length + ' producer ใหม่ — เลือก Senior ใน column B\n' +
-    'หลังเลือกครบ → session ใหม่จะ auto-assign Senior อัตโนมัติ'
-  );
 }
 
 
@@ -1324,10 +1263,7 @@ function _appendNewSessionsToMasterLog(sheet, sessionRows, sc) {
   var filter = sheet.getFilter();
   if (filter) filter.remove();
 
-  // ✨ NEW: โหลด Producer→Senior assignments (auto-fill Senior PIC ตอน append)
-  var assignments = getProducerAssignments_();
-
-  // Append rows ต่อท้าย
+  // Append rows ต่อท้าย — Senior PIC ว่างไว้ ให้ Senior กรอกเองใน Today
   var appendStart = lastRow + 1;
   var nNew = newSessions.length;
 
@@ -1339,7 +1275,7 @@ function _appendNewSessionsToMasterLog(sheet, sessionRows, sc) {
     row[1] = s.timeStr;
     row[2] = s.producer;
     row[3] = s.brand;
-    row[4] = assignments[s.producer] || ''; // ✨ Auto-fill Senior จาก mapping
+    row[4] = ''; // Senior PIC — Senior เลือกเองใน Today (Producer 1 คน Senior หลายคนได้)
     for (var ci = 1; ci <= 16; ci++) row[4 + ci] = 'N/A';
     return row;
   });
