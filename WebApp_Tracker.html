@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>📋 Producer Tracker</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Sarabun', Roboto, sans-serif;
+    background: #F5F7FA;
+    color: #2C2C2A;
+    font-size: 15px;
+    padding-bottom: 80px;
+    min-height: 100vh;
+  }
+
+  /* ─── HEADER (matches ProducerDashboard) ─── */
+  header {
+    background: #1A1A1A;
+    color: white;
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 17px; font-weight: 700; }
+  header .subtitle { font-size: 11px; color: #888; margin-top: 4px; letter-spacing: 0.3px; }
+  .user-chip {
+    background: rgba(255,255,255,0.1);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    color: #ccc;
+  }
+
+  /* ─── TABS ─── */
+  .tabs {
+    background: white;
+    border-bottom: 1px solid #E5E3DA;
+    display: flex;
+    position: sticky;
+    top: 60px;
+    z-index: 50;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    border-bottom: 3px solid transparent;
+    background: white;
+    border-left: 0; border-right: 0; border-top: 0;
+    cursor: pointer;
+  }
+  .tab.active {
+    color: #2E5CA8;
+    border-bottom-color: #2E5CA8;
+  }
+  .tab .badge {
+    background: #C72C2C;
+    color: white;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 10px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  /* ─── SENIOR FILTER ─── */
+  .senior-bar {
+    background: white;
+    padding: 10px 16px;
+    border-bottom: 1px solid #E5E3DA;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+  .senior-chip {
+    padding: 7px 14px;
+    border-radius: 20px;
+    background: #F1EFE8;
+    color: #2C2C2A;
+    font-weight: 600;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 0;
+  }
+  .senior-chip.active {
+    background: #2E5CA8;
+    color: white;
+  }
+
+  /* ─── PROGRESS SUMMARY BAR ─── */
+  .progress-bar {
+    background: white;
+    padding: 14px 16px;
+    border-bottom: 1px solid #E5E3DA;
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+  }
+  .progress-bar .stat {
+    flex: 1;
+  }
+  .progress-bar .num {
+    font-size: 20px;
+    font-weight: 800;
+    color: #2C2C2A;
+  }
+  .progress-bar .num.green { color: #1A7A5E; }
+  .progress-bar .num.red   { color: #C72C2C; }
+  .progress-bar .num.gray  { color: #888; }
+  .progress-bar .lbl {
+    font-size: 10px;
+    color: #888;
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ─── SESSION LIST ─── */
+  .sessions {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .session-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+
+  .session-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #F0EFE8;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .session-info { flex: 1; }
+  .session-info .producer {
+    font-weight: 700;
+    font-size: 16px;
+    color: #2C2C2A;
+  }
+  .session-info .brand {
+    color: #2E5CA8;
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 2px;
+  }
+  .session-info .meta {
+    color: #888;
+    font-size: 11px;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .session-status {
+    padding: 4px 10px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-pending  { background: #FFF4D8; color: #8B6F1A; }
+  .status-done     { background: #D8F0E6; color: #0F6E56; }
+  .status-overdue  { background: #FAECE7; color: #C72C2C; }
+  .status-upcoming { background: #E8E8E8; color: #666; }
+
+  /* Senior selector inside card (if not yet picked) */
+  .senior-picker {
+    padding: 12px 16px;
+    background: #FFF8E1;
+    border-bottom: 1px solid #F0EFE8;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .senior-picker .label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #8B6F1A;
+    flex-shrink: 0;
+  }
+  .senior-picker select {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+  }
+
+  /* Phase headers */
+  .phase {
+    border-bottom: 1px solid #F5F4EE;
+  }
+  .phase:last-child { border-bottom: none; }
+  .phase-header {
+    padding: 10px 16px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .phase-pre  { background: #E6F1FB; color: #0C447C; }
+  .phase-dur  { background: #FAEEDA; color: #412402; }
+  .phase-post { background: #EAF3DE; color: #173404; }
+
+  .items { padding: 4px 16px 12px; }
+  .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 11px 0;
+    border-bottom: 1px solid #FAFAF6;
+    gap: 12px;
+  }
+  .item:last-child { border-bottom: none; }
+  .item-label {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.35;
+    color: #2C2C2A;
+  }
+  .item-label .bonus {
+    color: #3C3489;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  /* 3-state toggle */
+  .toggle {
+    display: flex;
+    background: #F1EFE8;
+    border-radius: 8px;
+    padding: 2px;
+    gap: 1px;
+    flex-shrink: 0;
+  }
+  .toggle button {
+    border: 0;
+    background: transparent;
+    padding: 10px 13px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 6px;
+    color: #888;
+    min-width: 46px;
+    min-height: 38px;
+    transition: all 0.12s;
+    cursor: pointer;
+  }
+  .toggle button.active.pass { background: #1A7A5E; color: white; }
+  .toggle button.active.fail { background: #C72C2C; color: white; }
+  .toggle button.active.na   { background: #888;    color: white; }
+
+  /* Score footer in card */
+  .score-bar {
+    padding: 12px 16px;
+    background: #FAFAF6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #F0EFE8;
+  }
+  .score-display .num {
+    font-size: 20px;
+    font-weight: 800;
+    color: #2C2C2A;
+  }
+  .score-display .lbl {
+    font-size: 10px;
+    color: #888;
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .save-indicator {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
+  .save-indicator.idle   { background: #F1EFE8; color: #888; }
+  .save-indicator.saving { background: #FFF4D8; color: #8B6F1A; }
+  .save-indicator.saved  { background: #D8F0E6; color: #0F6E56; }
+  .save-indicator.error  { background: #FAECE7; color: #C72C2C; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: #888;
+  }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty .msg { font-size: 14px; }
+
+  /* Loading */
+  .loading {
+    text-align: center;
+    padding: 32px;
+    color: #888;
+    font-size: 13px;
+  }
+
+  /* History sheet (expand on tap) */
+  .history-toggle {
+    text-align: center;
+    padding: 8px;
+    font-size: 11px;
+    color: #2E5CA8;
+    cursor: pointer;
+    background: #FAFAF6;
+    border-top: 1px solid #F0EFE8;
+  }
+  .history-content {
+    display: none;
+    padding: 12px 16px;
+    background: #FAFAF6;
+    border-top: 1px solid #F0EFE8;
+    font-size: 11px;
+    color: #666;
+  }
+  .history-content.open { display: block; }
+  .history-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+
+  /* ─── STATS TAB ─── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+  .kpi {
+    padding: 16px;
+    border-radius: 12px;
+    color: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .kpi-1 { background: linear-gradient(135deg, #1E3A5F, #2E5CA8); }
+  .kpi-2 { background: linear-gradient(135deg, #0F3D2B, #1A7A5E); }
+  .kpi-3 { background: linear-gradient(135deg, #3D2E08, #B8860B); }
+  .kpi-4 { background: linear-gradient(135deg, #3D1212, #C72C2C); }
+  .kpi-lbl { font-size: 10px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.8px; }
+  .kpi-val { font-size: 28px; font-weight: 800; margin-top: 6px; }
+  .kpi-sub { font-size: 10px; opacity: 0.7; margin-top: 4px; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div>
+      <h1>📋 Producer Tracker</h1>
+      <div class="subtitle" id="today-date">Loading...</div>
+    </div>
+    <div class="user-chip" id="user-chip">—</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" data-tab="today">วันนี้</button>
+  <button class="tab" data-tab="overdue">Overdue <span class="badge" id="overdue-badge" style="display:none">0</span></button>
+  <button class="tab" data-tab="stats">Stats</button>
+</div>
+
+<div class="senior-bar" id="senior-bar">
+  <button class="senior-chip active" data-senior="">All</button>
+  <button class="senior-chip" data-senior="Mink">Mink</button>
+  <button class="senior-chip" data-senior="Peet">Peet</button>
+  <button class="senior-chip" data-senior="Nine">Nine</button>
+</div>
+
+<div class="progress-bar" id="progress-bar">
+  <div class="stat"><div class="num gray" id="stat-total">—</div><div class="lbl">Total</div></div>
+  <div class="stat"><div class="num green" id="stat-done">—</div><div class="lbl">Done</div></div>
+  <div class="stat"><div class="num" id="stat-pending">—</div><div class="lbl">Pending</div></div>
+  <div class="stat"><div class="num red" id="stat-overdue">—</div><div class="lbl">Overdue</div></div>
+</div>
+
+<div id="content" class="sessions">
+  <div class="loading">⏳ กำลังโหลด...</div>
+</div>
+
+
+<script>
+// ========================================================
+//  STATE
+// ========================================================
+var state = {
+  tab: 'today',
+  senior: '',
+  sessions: [],
+  meta: {},
+  saveTimers: {},
+  cardEls: {}
+};
+
+// ========================================================
+//  CHECKLIST ITEM DEFINITIONS
+// ========================================================
+var ITEMS = {
+  pre: [
+    'Artwork correct', 'Brief: Promotion', 'Brief: Hero SKU',
+    'Brief: Key msg', 'Technical: Visual', 'Technical: Audio'
+  ],
+  durBase: [
+    'ปักตะกร้าทัน (MC/ผู้ชม)', 'กดถูกใจ >1K/15min',
+    'Comment Engagement', 'ส่งข้อมูล Dashboard'
+  ],
+  durBonus: '★ Creativity & Innovation',
+  postBase: [
+    'กรอก Form', 'ส่ง Dashboard → GChat',
+    'จัดระเบียบห้อง Live', 'ปิดอุปกรณ์ทั้งหมด'
+  ],
+  postBonus: '★ Feedback with Team'
+};
+
+// ========================================================
+//  INIT
+// ========================================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Tab handlers
+  document.querySelectorAll('.tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      state.tab = btn.dataset.tab;
+      loadData();
+    });
+  });
+
+  // Senior chip handlers
+  document.querySelectorAll('.senior-chip').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.senior-chip').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      state.senior = btn.dataset.senior;
+      loadData();
+    });
+  });
+
+  loadData();
+});
+
+
+// ========================================================
+//  LOAD DATA
+// ========================================================
+function loadData() {
+  document.getElementById('content').innerHTML = '<div class="loading">⏳ กำลังโหลด...</div>';
+
+  if (state.tab === 'stats') {
+    loadStats();
+    return;
+  }
+
+  var filter = state.tab; // 'today' or 'overdue'
+  google.script.run
+    .withSuccessHandler(function(data) {
+      state.sessions = data.sessions || [];
+      state.meta = data.meta || {};
+      renderHeader();
+      renderProgress();
+      renderSessions();
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('content').innerHTML =
+        '<div class="empty"><div class="icon">⚠️</div><div class="msg">โหลดข้อมูลไม่สำเร็จ:<br>' + err.message + '</div></div>';
+    })
+    .getSessions(filter, state.senior);
+}
+
+
+// ========================================================
+//  HEADER + PROGRESS
+// ========================================================
+function renderHeader() {
+  document.getElementById('today-date').textContent = state.meta.todayStr || '';
+  document.getElementById('user-chip').textContent = state.meta.user ? state.meta.user.name : '';
+}
+
+function renderProgress() {
+  var total = state.sessions.length;
+  var done = 0, pending = 0, overdue = 0;
+  state.sessions.forEach(function(s) {
+    if (s.status.indexOf('Done') > -1) done++;
+    else if (s.status.indexOf('Overdue') > -1) overdue++;
+    else pending++;
+  });
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-pending').textContent = pending;
+  document.getElementById('stat-overdue').textContent = overdue;
+
+  // Overdue badge in tab
+  var badge = document.getElementById('overdue-badge');
+  if (overdue > 0 && state.tab !== 'overdue') {
+    badge.textContent = overdue;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+
+// ========================================================
+//  RENDER SESSIONS
+// ========================================================
+function renderSessions() {
+  var content = document.getElementById('content');
+  content.className = 'sessions';
+
+  if (state.sessions.length === 0) {
+    var msg = state.tab === 'overdue'
+      ? 'ไม่มี session ค้าง 🎉'
+      : 'ไม่มี session สำหรับวันนี้';
+    content.innerHTML = '<div class="empty"><div class="icon">🗓</div><div class="msg">' + msg + '</div></div>';
+    return;
+  }
+
+  content.innerHTML = '';
+  state.cardEls = {};
+  state.sessions.forEach(function(s, idx) {
+    var card = buildCard(s, idx);
+    content.appendChild(card);
+    state.cardEls[s.key] = card;
+  });
+}
+
+
+function buildCard(s, idx) {
+  var card = document.createElement('div');
+  card.className = 'session-card';
+  card.dataset.key = s.key;
+
+  // Status badge
+  var statusClass = 'status-pending';
+  var statusText = 'Pending';
+  if (s.status.indexOf('Done') > -1) { statusClass = 'status-done'; statusText = 'Done ✓'; }
+  else if (s.status.indexOf('Overdue') > -1) { statusClass = 'status-overdue'; statusText = 'Overdue'; }
+  else if (s.status.indexOf('Upcoming') > -1) { statusClass = 'status-upcoming'; statusText = 'Upcoming'; }
+
+  // Header
+  var header = document.createElement('div');
+  header.className = 'session-header';
+  header.innerHTML =
+    '<div class="session-info">' +
+      '<div class="producer">' + escapeHtml(s.producer) + '</div>' +
+      '<div class="brand">' + escapeHtml(s.brand) + '</div>' +
+      '<div class="meta">' + escapeHtml(s.date) + ' · ' + escapeHtml(s.time) + '</div>' +
+    '</div>' +
+    '<div class="session-status ' + statusClass + '">' + statusText + '</div>';
+  card.appendChild(header);
+
+  // Senior picker (if not yet selected)
+  var seniorBlock = document.createElement('div');
+  seniorBlock.className = 'senior-picker';
+  seniorBlock.innerHTML =
+    '<div class="label">Senior:</div>' +
+    '<select data-role="senior">' +
+      '<option value="">-- เลือก --</option>' +
+      ['Mink','Peet','Nine'].map(function(n){
+        return '<option value="' + n + '"' + (s.senior === n ? ' selected' : '') + '>' + n + '</option>';
+      }).join('') +
+    '</select>';
+  card.appendChild(seniorBlock);
+  seniorBlock.querySelector('select').addEventListener('change', function(e){
+    s.senior = e.target.value;
+    queueSave(s);
+  });
+
+  // Pre-live phase
+  card.appendChild(buildPhase('pre',  'Pre-live · 6 items',         ITEMS.pre,      s.pre,      s, 'pre'));
+  // During-live (4 base + 1 bonus)
+  card.appendChild(buildPhase('dur',  'During-live · 4 + 1 bonus',
+    ITEMS.durBase.concat(['★|' + ITEMS.durBonus]),
+    s.durBase.concat([s.durBonus]),
+    s, 'dur'));
+  // Post-live (4 base + 1 bonus)
+  card.appendChild(buildPhase('post', 'Post-live · 4 + 1 bonus',
+    ITEMS.postBase.concat(['★|' + ITEMS.postBonus]),
+    s.postBase.concat([s.postBonus]),
+    s, 'post'));
+
+  // Score bar
+  var scoreBar = document.createElement('div');
+  scoreBar.className = 'score-bar';
+  scoreBar.innerHTML =
+    '<div class="score-display">' +
+      '<div class="num"><span data-role="base">' + (s.baseScore || 0) + '</span>/14 ' +
+      '<span style="font-size:13px;color:#888;font-weight:600">· bonus <span data-role="bonus">' + (s.bonusScore || 0) + '</span>/2</span></div>' +
+      '<div class="lbl"><span data-role="filled">0</span> items กรอกแล้ว / 16</div>' +
+    '</div>' +
+    '<div class="save-indicator idle" data-role="save">●  Auto-save</div>';
+  card.appendChild(scoreBar);
+
+  updateScoreDisplay(card, s);
+
+  // History toggle (only shown if there's history)
+  var histToggle = document.createElement('div');
+  histToggle.className = 'history-toggle';
+  histToggle.textContent = '📊 ดูประวัติของ ' + s.producer + ' (5 sessions ล่าสุด)';
+  card.appendChild(histToggle);
+
+  var histContent = document.createElement('div');
+  histContent.className = 'history-content';
+  histContent.innerHTML = '<div class="loading" style="padding:8px;font-size:11px">กำลังโหลด...</div>';
+  card.appendChild(histContent);
+
+  histToggle.addEventListener('click', function() {
+    if (histContent.classList.contains('open')) {
+      histContent.classList.remove('open');
+      return;
+    }
+    histContent.classList.add('open');
+    if (histContent.dataset.loaded) return;
+    google.script.run.withSuccessHandler(function(hist) {
+      if (!hist || hist.length === 0) {
+        histContent.innerHTML = '<div style="text-align:center;color:#888">ยังไม่มีประวัติ</div>';
+      } else {
+        histContent.innerHTML = hist.map(function(h) {
+          return '<div class="history-row"><span>' + escapeHtml(h.date) + ' · ' + escapeHtml(h.brand) + '</span><strong>' + h.baseScore + '/14</strong></div>';
+        }).join('');
+      }
+      histContent.dataset.loaded = '1';
+    }).getProducerHistory(s.producer);
+  });
+
+  return card;
+}
+
+
+function buildPhase(cls, title, labels, values, session, phaseKey) {
+  var phase = document.createElement('div');
+  phase.className = 'phase';
+
+  var hdr = document.createElement('div');
+  hdr.className = 'phase-header phase-' + cls;
+  hdr.textContent = title;
+  phase.appendChild(hdr);
+
+  var items = document.createElement('div');
+  items.className = 'items';
+
+  labels.forEach(function(label, idx) {
+    var isBonus = label.indexOf('★|') === 0;
+    var displayLabel = isBonus ? label.substring(2) : label;
+
+    var item = document.createElement('div');
+    item.className = 'item';
+    item.innerHTML =
+      '<div class="item-label">' +
+        (isBonus ? '<span class="bonus">★</span>' : '') +
+        escapeHtml(displayLabel) +
+      '</div>' +
+      '<div class="toggle">' +
+        '<button data-val="Pass">Pass</button>' +
+        '<button data-val="Fail">Fail</button>' +
+        '<button data-val="N/A">N/A</button>' +
+      '</div>';
+
+    // Set initial active state
+    var current = values[idx] || 'N/A';
+    item.querySelectorAll('.toggle button').forEach(function(btn) {
+      if (btn.dataset.val === current) {
+        btn.classList.add('active');
+        if (current === 'Pass') btn.classList.add('pass');
+        else if (current === 'Fail') btn.classList.add('fail');
+        else btn.classList.add('na');
+      }
+    });
+
+    // Click handler
+    item.querySelectorAll('.toggle button').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        item.querySelectorAll('.toggle button').forEach(function(b) {
+          b.classList.remove('active', 'pass', 'fail', 'na');
+        });
+        var val = btn.dataset.val;
+        btn.classList.add('active');
+        if (val === 'Pass') btn.classList.add('pass');
+        else if (val === 'Fail') btn.classList.add('fail');
+        else btn.classList.add('na');
+
+        // Update session data
+        if (phaseKey === 'pre') session.pre[idx] = val;
+        else if (phaseKey === 'dur') {
+          if (idx < 4) session.durBase[idx] = val;
+          else session.durBonus = val;
+        }
+        else if (phaseKey === 'post') {
+          if (idx < 4) session.postBase[idx] = val;
+          else session.postBonus = val;
+        }
+
+        var card = state.cardEls[session.key];
+        if (card) updateScoreDisplay(card, session);
+
+        queueSave(session);
+      });
+    });
+
+    items.appendChild(item);
+  });
+
+  phase.appendChild(items);
+  return phase;
+}
+
+
+// ========================================================
+//  SCORE CALC + DISPLAY
+// ========================================================
+function updateScoreDisplay(card, s) {
+  var base = 0, bonus = 0, filled = 0;
+  var all = s.pre.concat(s.durBase, [s.durBonus], s.postBase, [s.postBonus]);
+  all.forEach(function(v) {
+    if (v === 'Pass' || v === 'Fail') filled++;
+  });
+  s.pre.forEach(function(v){ if (v === 'Pass') base++; });
+  s.durBase.forEach(function(v){ if (v === 'Pass') base++; });
+  s.postBase.forEach(function(v){ if (v === 'Pass') base++; });
+  if (s.durBonus === 'Pass') bonus++;
+  if (s.postBonus === 'Pass') bonus++;
+
+  card.querySelector('[data-role="base"]').textContent  = base;
+  card.querySelector('[data-role="bonus"]').textContent = bonus;
+  card.querySelector('[data-role="filled"]').textContent = filled;
+}
+
+
+// ========================================================
+//  AUTO-SAVE (debounced)
+// ========================================================
+function queueSave(session) {
+  if (state.saveTimers[session.key]) {
+    clearTimeout(state.saveTimers[session.key]);
+  }
+  setSaveStatus(session.key, 'saving', '● บันทึก...');
+  state.saveTimers[session.key] = setTimeout(function() {
+    doSave(session);
+  }, 600); // debounce 600ms
+}
+
+function doSave(session) {
+  var payload = {
+    key:    session.key,
+    senior: session.senior || '',
+    items:  session.pre.concat(session.durBase, [session.durBonus], session.postBase, [session.postBonus])
+  };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.ok) {
+        setSaveStatus(session.key, 'saved', '✓ บันทึกแล้ว');
+        setTimeout(function() {
+          setSaveStatus(session.key, 'idle', '●  Auto-save');
+        }, 2000);
+      } else {
+        setSaveStatus(session.key, 'error', '⚠️ ' + (result.reason || 'fail'));
+      }
+    })
+    .withFailureHandler(function(err) {
+      setSaveStatus(session.key, 'error', '⚠️ ' + err.message);
+    })
+    .saveEvaluation(payload);
+}
+
+function setSaveStatus(key, statusClass, text) {
+  var card = state.cardEls[key];
+  if (!card) return;
+  var el = card.querySelector('[data-role="save"]');
+  if (!el) return;
+  el.className = 'save-indicator ' + statusClass;
+  el.textContent = text;
+}
+
+
+// ========================================================
+//  STATS TAB
+// ========================================================
+function loadStats() {
+  var senior = state.senior || 'Mink';
+  google.script.run
+    .withSuccessHandler(function(stats) {
+      if (!stats) {
+        document.getElementById('content').innerHTML = '<div class="empty"><div class="icon">📊</div><div class="msg">No stats</div></div>';
+        return;
+      }
+      renderStats(stats, senior);
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('content').innerHTML = '<div class="empty">' + err.message + '</div>';
+    })
+    .getSeniorStats(senior);
+}
+
+function renderStats(stats, senior) {
+  var content = document.getElementById('content');
+  content.className = '';
+
+  var producerRows = Object.keys(stats.producers).map(function(name) {
+    var p = stats.producers[name];
+    var avg = p.scoreCount > 0 ? Math.round((p.scoreSum / p.scoreCount / 14) * 100) : null;
+    return { name: name, sessions: p.sessions, avg: avg };
+  }).sort(function(a,b) {
+    if (a.avg === null && b.avg === null) return 0;
+    if (a.avg === null) return 1;
+    if (b.avg === null) return -1;
+    return b.avg - a.avg;
+  });
+
+  content.innerHTML =
+    '<div class="kpi-row">' +
+      '<div class="kpi kpi-1"><div class="kpi-lbl">Assigned</div><div class="kpi-val">' + stats.assigned + '</div><div class="kpi-sub">Senior: ' + senior + '</div></div>' +
+      '<div class="kpi kpi-2"><div class="kpi-lbl">Done</div><div class="kpi-val">' + stats.done + '</div><div class="kpi-sub">' + stats.evalRate + '% eval rate</div></div>' +
+      '<div class="kpi kpi-3"><div class="kpi-lbl">Pending</div><div class="kpi-val">' + stats.pending + '</div><div class="kpi-sub">รอกรอก</div></div>' +
+      '<div class="kpi kpi-4"><div class="kpi-lbl">Overdue</div><div class="kpi-val">' + stats.overdue + '</div><div class="kpi-sub">ค้างเกินวัน</div></div>' +
+    '</div>' +
+    '<div style="padding:14px"><div style="background:white;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
+      '<h3 style="font-size:13px;font-weight:700;margin-bottom:12px;color:#2C2C2A">Producer Leaderboard</h3>' +
+      producerRows.map(function(p) {
+        var bg = p.avg === null ? '#F1EFE8'
+               : p.avg >= 75 ? '#D8F0E6'
+               : p.avg >= 60 ? '#FFF4D8'
+               : '#FAECE7';
+        var fg = p.avg === null ? '#888'
+               : p.avg >= 75 ? '#0F6E56'
+               : p.avg >= 60 ? '#8B6F1A'
+               : '#C72C2C';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F5F4EE">' +
+          '<div><strong>' + escapeHtml(p.name) + '</strong><div style="font-size:11px;color:#888">' + p.sessions + ' sessions</div></div>' +
+          '<div style="background:' + bg + ';color:' + fg + ';padding:5px 12px;border-radius:8px;font-weight:700;font-size:13px">' +
+            (p.avg !== null ? p.avg + '%' : '—') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div></div>';
+}
+
+
+// ========================================================
+//  HELPERS
+// ========================================================
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m];
+  });
+}
+</script>
+
+</body>
+</html>

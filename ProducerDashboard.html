@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Producer Performance Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #F5F7FA; color: #2C2C2A;
+      min-height: 100vh;
+    }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+
+    /* Header */
+    .header {
+      background: #1A1A1A; color: white;
+      padding: 24px 32px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header .subtitle { font-size: 12px; color: #888; margin-top: 4px; }
+    .header-right { display: flex; gap: 12px; align-items: center; }
+
+    /* Upload */
+    .upload-zone {
+      background: white; border: 2px dashed #2E5CA8; border-radius: 12px;
+      padding: 48px; text-align: center; cursor: pointer;
+      margin-bottom: 24px; transition: all 0.2s;
+    }
+    .upload-zone:hover { border-color: #1A7A5E; background: #F0F8FF; }
+    .upload-zone.dragover { border-color: #1A7A5E; background: #E1F5EE; transform: scale(1.01); }
+    .upload-zone h2 { color: #2E5CA8; font-size: 20px; margin-bottom: 12px; }
+    .upload-zone p { color: #666; font-size: 14px; line-height: 1.6; }
+    .upload-zone .hint { color: #999; font-size: 12px; margin-top: 16px; }
+    #fileInput { display: none; }
+
+    /* Filters */
+    .filters {
+      background: white; padding: 16px 24px; border-radius: 12px;
+      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+      margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-group label {
+      font-size: 11px; font-weight: 600; color: #666;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .filter-group select, .filter-group input {
+      padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 13px; min-width: 140px;
+    }
+    .filter-actions { margin-left: auto; display: flex; gap: 8px; }
+    button {
+      background: #2E5CA8; color: white; border: none;
+      padding: 8px 16px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 500;
+    }
+    button:hover { background: #1E3A6E; }
+    button.secondary { background: #6c757d; }
+    button.secondary:hover { background: #5a6268; }
+
+    /* KPI cards */
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .kpi {
+      padding: 24px; border-radius: 12px; color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .kpi-1 { background: linear-gradient(135deg, #1E3A5F, #2E5CA8); }
+    .kpi-2 { background: linear-gradient(135deg, #0F3D2B, #1A7A5E); }
+    .kpi-3 { background: linear-gradient(135deg, #3D2E08, #B8860B); }
+    .kpi-4 { background: linear-gradient(135deg, #3D1212, #C72C2C); }
+    .kpi-label { font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 1px; }
+    .kpi-value { font-size: 32px; font-weight: 700; margin-top: 8px; }
+    .kpi-sub { font-size: 11px; opacity: 0.7; margin-top: 4px; }
+
+    /* Charts grid */
+    .charts {
+      display: grid; grid-template-columns: 1.4fr 1fr;
+      gap: 20px; margin-bottom: 24px;
+    }
+    .chart-card {
+      background: white; padding: 20px; border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .chart-card h3 {
+      font-size: 14px; font-weight: 600; color: #2C2C2A;
+      margin-bottom: 16px;
+    }
+    .chart-card .chart-container {
+      position: relative; height: 320px;
+    }
+    .chart-card.full { grid-column: 1 / -1; }
+
+    /* Tables */
+    .table-card {
+      background: white; border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .table-header {
+      padding: 16px 24px; background: #1E3A6E; color: white;
+      font-size: 14px; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: #2E5CA8; color: white; padding: 10px 12px;
+      text-align: left; font-weight: 600; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      cursor: pointer; user-select: none;
+    }
+    th:hover { background: #1E3A6E; }
+    th.num, td.num { text-align: right; }
+    td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+    tr:hover td { background: #F8F9FA; }
+    tr:nth-child(even) td { background: #FAFBFC; }
+    tr:nth-child(even):hover td { background: #F0F4F8; }
+
+    .badge {
+      display: inline-block; padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-top    { background: #D4EDDA; color: #155724; }
+    .badge-above  { background: #D1ECF1; color: #0C5460; }
+    .badge-below  { background: #FFF3CD; color: #856404; }
+    .badge-risk   { background: #F8D7DA; color: #721C24; }
+
+    .heatmap-cell {
+      padding: 6px 8px; text-align: center; font-weight: 600;
+      font-size: 12px; min-width: 70px;
+    }
+    .h-90 { background: #1A7A5E; color: white; }
+    .h-75 { background: #76C59E; color: white; }
+    .h-50 { background: #FAC775; color: #412402; }
+    .h-25 { background: #F09251; color: white; }
+    .h-0  { background: #D65A3B; color: white; }
+    .h-na { background: #F5F5F5; color: #999; }
+
+    .empty-state { padding: 60px; text-align: center; color: #999; }
+
+    .mom-up   { color: #1A7A5E; font-weight: 600; }
+    .mom-down { color: #C72C2C; font-weight: 600; }
+    .mom-flat { color: #888; }
+
+    /* Expandable row */
+    tr.producer-row { cursor: pointer; }
+    tr.producer-row td:first-child::before {
+      content: '▶ '; color: #999; font-size: 10px; transition: transform 0.2s;
+    }
+    tr.producer-row.expanded td:first-child::before { content: '▼ '; }
+    tr.detail-row td { background: #F8F9FA !important; padding: 16px 24px; }
+    .detail-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .detail-block h4 {
+      font-size: 12px; color: #2E5CA8; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 8px;
+    }
+    .detail-block table {
+      background: white; border: 1px solid #E0E0E0; border-radius: 6px; overflow: hidden;
+    }
+    .detail-block th { background: #444441; padding: 8px 10px; }
+    .detail-block td { padding: 6px 10px; font-size: 12px; }
+
+    /* Hide dashboard until data loaded */
+    .dashboard { display: none; }
+    .dashboard.active { display: block; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>📊 Producer Performance Dashboard</h1>
+      <div class="subtitle">Interactive analysis · Auto date-swap fix · No Senior Tracker sync</div>
+    </div>
+    <div class="header-right">
+      <span id="dataStats" style="font-size: 12px; color: #888;"></span>
+      <button class="secondary" id="reloadBtn" style="display:none">📁 Load new CSV</button>
+    </div>
+  </div>
+
+  <!-- Upload zone (visible until data loaded) -->
+  <div id="uploadZone" class="upload-zone">
+    <h2>📁 Drop CSV file here</h2>
+    <p>หรือ click เพื่อเลือกไฟล์</p>
+    <p class="hint">
+      Export จาก Google Sheet:<br>
+      <strong>📋 Performance Data tab → File → Download → Comma Separated Values (.csv)</strong>
+    </p>
+    <input type="file" id="fileInput" accept=".csv">
+  </div>
+
+  <!-- Dashboard (hidden until data loaded) -->
+  <div class="dashboard" id="dashboard">
+    <!-- Filters -->
+    <div class="filters">
+      <div class="filter-group">
+        <label>📅 Month</label>
+        <select id="filterMonth"><option value="">All months</option></select>
+      </div>
+      <div class="filter-group">
+        <label>👤 Producer</label>
+        <select id="filterProducer"><option value="">All producers</option></select>
+      </div>
+      <div class="filter-group">
+        <label>🏷️ Brand</label>
+        <select id="filterBrand"><option value="">All brands</option></select>
+      </div>
+      <div class="filter-group">
+        <label>📡 Channel</label>
+        <select id="filterChannel"><option value="">All channels</option></select>
+      </div>
+      <div class="filter-actions">
+        <button id="resetFilters" class="secondary">↻ Reset</button>
+      </div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="kpi-row">
+      <div class="kpi kpi-1">
+        <div class="kpi-label">📋 Sessions</div>
+        <div class="kpi-value" id="kpiSessions">—</div>
+        <div class="kpi-sub" id="kpiSessionsSub"></div>
+      </div>
+      <div class="kpi kpi-2">
+        <div class="kpi-label">💰 Total GMV</div>
+        <div class="kpi-value" id="kpiGmv">—</div>
+        <div class="kpi-sub" id="kpiGmvSub"></div>
+      </div>
+      <div class="kpi kpi-3">
+        <div class="kpi-label">⏱ Hours · GMV/Hr</div>
+        <div class="kpi-value" id="kpiGmvHr">—</div>
+        <div class="kpi-sub" id="kpiGmvHrSub"></div>
+      </div>
+      <div class="kpi kpi-4">
+        <div class="kpi-label">🏆 Top Producer</div>
+        <div class="kpi-value" style="font-size:24px" id="kpiTop">—</div>
+        <div class="kpi-sub" id="kpiTopSub"></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts">
+      <div class="chart-card">
+        <h3>📈 Monthly GMV Trend</h3>
+        <div class="chart-container"><canvas id="chartMonthly"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>🏆 Top 10 Producers by GMV</h3>
+        <div class="chart-container"><canvas id="chartTopProducers"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>🏷️ Top Brands by GMV</h3>
+        <div class="chart-container"><canvas id="chartBrands"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>💎 GMV/Hr vs Sessions (per Producer)</h3>
+        <div class="chart-container"><canvas id="chartScatter"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Producer Leaderboard -->
+    <div class="table-card">
+      <div class="table-header">
+        <span>🏆 Producer Leaderboard</span>
+        <span id="leaderboardCount" style="font-size: 12px; opacity: 0.8;"></span>
+      </div>
+      <div class="table-wrapper">
+        <table id="leaderboardTable">
+          <thead>
+            <tr>
+              <th data-sort="rank">#</th>
+              <th data-sort="producer">Producer</th>
+              <th class="num" data-sort="sessions">Sessions</th>
+              <th class="num" data-sort="hours">Hours</th>
+              <th class="num" data-sort="gmv">GMV</th>
+              <th class="num" data-sort="gmvHr">GMV/Hr</th>
+              <th class="num" data-sort="ctr">CTR avg</th>
+              <th class="num" data-sort="coR">CO_R avg</th>
+              <th class="num" data-sort="orders">Orders</th>
+              <th class="num" data-sort="vsAvg">vs Avg</th>
+              <th class="num" data-sort="momChange">MoM</th>
+              <th data-sort="status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Producer × Month heatmap table -->
+    <div class="table-card">
+      <div class="table-header">
+        <span>📈 Producer × Month — GMV/Hr Heatmap</span>
+        <span style="font-size: 11px; opacity: 0.8;">🟩 top 10% · 🟢 top 25% · 🟡 median · 🟠 bottom 25%</span>
+      </div>
+      <div class="table-wrapper">
+        <table id="heatmapTable">
+          <thead><tr id="heatmapHeader"></tr></thead>
+          <tbody id="heatmapBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let rawData = [];
+let charts = {};
+let sortState = { key: 'gmv', dir: 'desc' };
+
+// ═══════════════════════════════════════════════════════════════
+//  DATE NORMALIZE (with swap fix)
+// ═══════════════════════════════════════════════════════════════
+function normalizeDate(d) {
+  if (!d) return null;
+  let date;
+  if (d instanceof Date) date = d;
+  else {
+    const s = String(d).trim();
+    // Try D/M/Y format first
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let y = parseInt(m[3]); if (y < 100) y += 2000;
+      return new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+    }
+    date = new Date(s);
+    if (isNaN(date.getTime())) return null;
+  }
+  // Apply swap fix
+  let year = date.getFullYear(), month = date.getMonth() + 1, day = date.getDate();
+  if (day <= 12) { [day, month] = [month, day]; }
+  return new Date(year, month - 1, day);
+}
+
+function fmtMonth(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
+function fmtMonthLabel(ym) {
+  const [y, m] = ym.split('-');
+  const names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return names[parseInt(m)] + ' ' + y;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FILE UPLOAD
+// ═══════════════════════════════════════════════════════════════
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const reloadBtn = document.getElementById('reloadBtn');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+reloadBtn.addEventListener('click', () => {
+  uploadZone.style.display = 'block';
+  document.getElementById('dashboard').classList.remove('active');
+  reloadBtn.style.display = 'none';
+});
+
+function loadFile(file) {
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    complete: results => {
+      console.log('Parsed', results.data.length, 'rows');
+      rawData = parseRawData(results.data);
+      if (rawData.length === 0) { alert('❌ ไม่พบ data ที่ valid ใน CSV'); return; }
+      uploadZone.style.display = 'none';
+      document.getElementById('dashboard').classList.add('active');
+      reloadBtn.style.display = 'inline-block';
+      initFilters();
+      render();
+    },
+    error: err => alert('❌ Error: ' + err)
+  });
+}
+
+const SKIP_PRODUCERS = new Set(['tbcp', 'cancel', 'brand', '']);
+
+// Parse number — strip commas (CSV thousands separator) + handle % sign
+function num(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v).replace(/,/g, '').replace(/฿/g, '').trim();
+  return parseFloat(s) || 0;
+}
+
+// Parse percent — return always as decimal (0.0452 = 4.52%)
+// Handles: "0.0452" → 0.0452 | "4.52%" → 0.0452 | "4.52" → 0.0452 (heuristic)
+function pct(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v).trim();
+  const hasPercent = s.includes('%');
+  const n = parseFloat(s.replace(/[,%]/g, '')) || 0;
+  if (hasPercent) return n / 100;
+  if (n > 1) return n / 100;
+  return n;
+}
+
+function parseRawData(rows) {
+  // Try to detect column names (flexible)
+  const cols = Object.keys(rows[0] || {});
+  const find = (...keys) => cols.find(c => keys.some(k => c.toLowerCase().includes(k.toLowerCase()))) || keys[0];
+
+  const colBrand    = find('brand');
+  const colChannel  = find('channel');
+  const colDate     = find('date');
+  const colSlot     = find('slot');
+  const colDur      = find('duration', 'hrs');
+  const colProducer = find('producer');
+  const colMc       = find('mc');
+  const colGmv      = find('gmv');
+  const colOrders   = find('orders');
+  const colUnits    = find('units');
+  const colCoR      = find('co_r', 'co rate', 'co-r');
+  const colCtr      = find('ctr');
+  const colViewers  = find('viewers');
+  const colEngaged  = find('engaged');
+
+  const out = [];
+  for (const r of rows) {
+    const prod = String(r[colProducer] || '').trim();
+    if (!prod || SKIP_PRODUCERS.has(prod.toLowerCase())) continue;
+    const date = normalizeDate(r[colDate]);
+    if (!date) continue;
+    const gmv = num(r[colGmv]);
+    if (gmv === 0) continue; // skip zero GMV
+    out.push({
+      brand: String(r[colBrand] || '').trim(),
+      channel: String(r[colChannel] || '').trim(),
+      date, ym: fmtMonth(date),
+      slot: String(r[colSlot] || ''),
+      dur: num(r[colDur]),
+      producer: prod,
+      mc: String(r[colMc] || '').trim(),
+      gmv,
+      orders: num(r[colOrders]),
+      units: num(r[colUnits]),
+      coR: pct(r[colCoR]),
+      ctr: pct(r[colCtr]),
+      viewers: num(r[colViewers]),
+      engaged: num(r[colEngaged]),
+    });
+  }
+  document.getElementById('dataStats').textContent = `${out.length.toLocaleString()} sessions loaded`;
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FILTERS
+// ═══════════════════════════════════════════════════════════════
+function initFilters() {
+  const months   = [...new Set(rawData.map(r => r.ym))].sort();
+  const producers = [...new Set(rawData.map(r => r.producer))].sort();
+  const brands   = [...new Set(rawData.map(r => r.brand))].sort();
+  const channels = [...new Set(rawData.map(r => r.channel).filter(Boolean))].sort();
+
+  fillSelect('filterMonth', months.map(m => [m, fmtMonthLabel(m)]));
+  fillSelect('filterProducer', producers.map(p => [p, p]));
+  fillSelect('filterBrand', brands.map(b => [b, b]));
+  fillSelect('filterChannel', channels.map(c => [c, c]));
+
+  // Default: latest month
+  if (months.length > 0) document.getElementById('filterMonth').value = months[months.length - 1];
+
+  ['filterMonth', 'filterProducer', 'filterBrand', 'filterChannel'].forEach(id => {
+    document.getElementById(id).addEventListener('change', render);
+  });
+  document.getElementById('resetFilters').addEventListener('click', () => {
+    document.getElementById('filterMonth').value = months[months.length - 1] || '';
+    document.getElementById('filterProducer').value = '';
+    document.getElementById('filterBrand').value = '';
+    document.getElementById('filterChannel').value = '';
+    render();
+  });
+}
+
+function fillSelect(id, items) {
+  const el = document.getElementById(id);
+  el.innerHTML = '<option value="">All</option>';
+  for (const [val, label] of items) {
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    el.appendChild(opt);
+  }
+}
+
+function getFilteredData() {
+  const month = document.getElementById('filterMonth').value;
+  const producer = document.getElementById('filterProducer').value;
+  const brand = document.getElementById('filterBrand').value;
+  const channel = document.getElementById('filterChannel').value;
+  return rawData.filter(r =>
+    (!month    || r.ym === month) &&
+    (!producer || r.producer === producer) &&
+    (!brand    || r.brand === brand) &&
+    (!channel  || r.channel === channel)
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════
+function render() {
+  const filtered = getFilteredData();
+  renderKpis(filtered);
+  renderCharts(filtered);
+  renderLeaderboard(filtered);
+  renderHeatmap();  // always shows all (not filtered)
+}
+
+function renderKpis(data) {
+  const totalGmv = data.reduce((s, r) => s + r.gmv, 0);
+  const totalHrs = data.reduce((s, r) => s + r.dur, 0);
+  const gmvHr = totalHrs > 0 ? totalGmv / totalHrs : 0;
+  const sessions = data.length;
+
+  // Top producer
+  const byProducer = {};
+  data.forEach(r => byProducer[r.producer] = (byProducer[r.producer] || 0) + r.gmv);
+  const topProd = Object.entries(byProducer).sort((a, b) => b[1] - a[1])[0];
+
+  document.getElementById('kpiSessions').textContent = sessions.toLocaleString();
+  document.getElementById('kpiSessionsSub').textContent = `${[...new Set(data.map(r => r.producer))].length} producers active`;
+
+  document.getElementById('kpiGmv').textContent = '฿' + (totalGmv >= 1e6 ? (totalGmv / 1e6).toFixed(2) + 'M' : Math.round(totalGmv).toLocaleString());
+  document.getElementById('kpiGmvSub').textContent = `Across ${[...new Set(data.map(r => r.brand))].length} brands`;
+
+  document.getElementById('kpiGmvHr').textContent = '฿' + Math.round(gmvHr).toLocaleString();
+  document.getElementById('kpiGmvHrSub').textContent = `${Math.round(totalHrs).toLocaleString()} total hours`;
+
+  document.getElementById('kpiTop').textContent = topProd ? topProd[0] : '—';
+  document.getElementById('kpiTopSub').textContent = topProd ? `฿${Math.round(topProd[1]).toLocaleString()}` : '';
+}
+
+function renderCharts(data) {
+  // Monthly trend (use ALL data for trend, regardless of filter except producer/brand/channel)
+  const month = document.getElementById('filterMonth').value;
+  const trendData = rawData.filter(r => {
+    const producer = document.getElementById('filterProducer').value;
+    const brand = document.getElementById('filterBrand').value;
+    const channel = document.getElementById('filterChannel').value;
+    return (!producer || r.producer === producer) &&
+           (!brand || r.brand === brand) &&
+           (!channel || r.channel === channel);
+  });
+
+  const monthlyGmv = {};
+  trendData.forEach(r => { monthlyGmv[r.ym] = (monthlyGmv[r.ym] || 0) + r.gmv; });
+  const sortedMonths = Object.keys(monthlyGmv).sort();
+  drawLine('chartMonthly', sortedMonths.map(fmtMonthLabel), sortedMonths.map(m => monthlyGmv[m]));
+
+  // Top 10 producers
+  const byProd = {};
+  data.forEach(r => byProd[r.producer] = (byProd[r.producer] || 0) + r.gmv);
+  const top10 = Object.entries(byProd).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  drawBar('chartTopProducers', top10.map(x => x[0]), top10.map(x => x[1]));
+
+  // Top brands
+  const byBrand = {};
+  data.forEach(r => byBrand[r.brand] = (byBrand[r.brand] || 0) + r.gmv);
+  const topBrands = Object.entries(byBrand).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  drawDonut('chartBrands', topBrands.map(x => x[0]), topBrands.map(x => x[1]));
+
+  // Scatter: GMV/Hr vs sessions
+  const scatterData = {};
+  data.forEach(r => {
+    if (!scatterData[r.producer]) scatterData[r.producer] = { gmv: 0, hrs: 0, sess: 0 };
+    scatterData[r.producer].gmv += r.gmv;
+    scatterData[r.producer].hrs += r.dur;
+    scatterData[r.producer].sess++;
+  });
+  const scatterPoints = Object.entries(scatterData).map(([name, s]) => ({
+    x: s.sess, y: s.hrs > 0 ? s.gmv / s.hrs : 0, label: name
+  }));
+  drawScatter('chartScatter', scatterPoints);
+}
+
+function drawLine(canvasId, labels, values) {
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'GMV (฿)', data: values,
+        borderColor: '#2E5CA8', backgroundColor: 'rgba(46,92,168,0.1)',
+        tension: 0.3, fill: true, pointRadius: 5, pointBackgroundColor: '#2E5CA8'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => '฿' + (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : (v/1e3).toFixed(0)+'K') } } }
+    }
+  });
+}
+
+function drawBar(canvasId, labels, values) {
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'GMV', data: values, backgroundColor: '#1A7A5E', borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { callback: v => '฿' + (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : (v/1e3).toFixed(0)+'K') } } }
+    }
+  });
+}
+
+function drawDonut(canvasId, labels, values) {
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: ['#1A7A5E','#76C59E','#FAC775','#F09251','#D65A3B','#7FB3E8','#2E5CA8','#1E3A6E'] }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+function drawScatter(canvasId, points) {
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Producers', data: points,
+        backgroundColor: 'rgba(46,92,168,0.6)', pointRadius: 6, pointHoverRadius: 9
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `${ctx.raw.label}: ${ctx.raw.x} sessions, ฿${Math.round(ctx.raw.y).toLocaleString()}/hr` } }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Sessions' } },
+        y: { title: { display: true, text: 'GMV/Hr (฿)' }, ticks: { callback: v => '฿' + (v/1e3).toFixed(0) + 'K' } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LEADERBOARD
+// ═══════════════════════════════════════════════════════════════
+function renderLeaderboard(data) {
+  const month = document.getElementById('filterMonth').value;
+
+  // Aggregate by producer
+  const agg = {};
+  data.forEach(r => {
+    if (!agg[r.producer]) agg[r.producer] = {
+      producer: r.producer, sessions: 0, hours: 0, gmv: 0, orders: 0,
+      ctrSum: 0, ctrN: 0, coRSum: 0, coRN: 0
+    };
+    const a = agg[r.producer];
+    a.sessions++; a.hours += r.dur; a.gmv += r.gmv; a.orders += r.orders;
+    if (r.ctr > 0) { a.ctrSum += r.ctr; a.ctrN++; }
+    if (r.coR > 0) { a.coRSum += r.coR; a.coRN++; }
+  });
+
+  // Prev month for MoM
+  let prevAgg = {};
+  if (month) {
+    const sortedMonths = [...new Set(rawData.map(r => r.ym))].sort();
+    const idx = sortedMonths.indexOf(month);
+    if (idx > 0) {
+      const prevMonth = sortedMonths[idx - 1];
+      const prevData = rawData.filter(r => r.ym === prevMonth);
+      prevData.forEach(r => {
+        if (!prevAgg[r.producer]) prevAgg[r.producer] = { gmv: 0 };
+        prevAgg[r.producer].gmv += r.gmv;
+      });
+    }
+  }
+
+  let rows = Object.values(agg).map(a => {
+    const gmvHr = a.hours > 0 ? a.gmv / a.hours : 0;
+    const ctr = a.ctrN > 0 ? a.ctrSum / a.ctrN : 0;
+    const coR = a.coRN > 0 ? a.coRSum / a.coRN : 0;
+    const prev = prevAgg[a.producer];
+    let momChange = null;
+    if (prev && prev.gmv > 0) momChange = (a.gmv - prev.gmv) / prev.gmv;
+    return { ...a, gmvHr, ctr, coR, momChange };
+  });
+
+  // Team avg GMV/hr
+  const totalGmv = rows.reduce((s, r) => s + r.gmv, 0);
+  const totalHrs = rows.reduce((s, r) => s + r.hours, 0);
+  const teamAvg = totalHrs > 0 ? totalGmv / totalHrs : 0;
+  rows.forEach(r => r.vsAvg = teamAvg > 0 ? r.gmvHr / teamAvg - 1 : 0);
+
+  // Status
+  rows.forEach(r => {
+    const ratio = teamAvg > 0 ? r.gmvHr / teamAvg : 0;
+    if (ratio >= 1.5) r.status = '🏆 Top';
+    else if (ratio >= 1.0) r.status = '✅ Above';
+    else if (ratio >= 0.5) r.status = '⚠️ Below';
+    else r.status = '🔴 At Risk';
+  });
+
+  // Sort
+  rows.sort((a, b) => {
+    const sk = sortState.key;
+    const va = a[sk], vb = b[sk];
+    if (typeof va === 'number') return sortState.dir === 'asc' ? va - vb : vb - va;
+    return sortState.dir === 'asc' ? String(va).localeCompare(vb) : String(vb).localeCompare(va);
+  });
+
+  // Render
+  const tbody = document.getElementById('leaderboardBody');
+  tbody.innerHTML = '';
+  rows.forEach((r, i) => {
+    const badge = r.status.includes('Top') ? 'badge-top'
+                : r.status.includes('Above') ? 'badge-above'
+                : r.status.includes('Below') ? 'badge-below' : 'badge-risk';
+    const momClass = r.momChange === null ? 'mom-flat' : r.momChange > 0.01 ? 'mom-up' : r.momChange < -0.01 ? 'mom-down' : 'mom-flat';
+    const momText = r.momChange === null ? '—'
+                  : (r.momChange > 0.01 ? '↑ +' : r.momChange < -0.01 ? '↓ ' : '→ ') + Math.round(r.momChange * 100) + '%';
+    const tr = document.createElement('tr');
+    tr.className = 'producer-row';
+    tr.dataset.producer = r.producer;
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td><strong>${r.producer}</strong></td>
+      <td class="num">${r.sessions}</td>
+      <td class="num">${r.hours.toFixed(1)}</td>
+      <td class="num">฿${fmtMoney(r.gmv)}</td>
+      <td class="num">฿${fmtMoney(r.gmvHr)}</td>
+      <td class="num">${(r.ctr * 100).toFixed(2)}%</td>
+      <td class="num">${(r.coR * 100).toFixed(2)}%</td>
+      <td class="num">${Math.round(r.orders).toLocaleString()}</td>
+      <td class="num">${(r.vsAvg >= 0 ? '+' : '') + Math.round(r.vsAvg * 100)}%</td>
+      <td class="num ${momClass}">${momText}</td>
+      <td><span class="badge ${badge}">${r.status}</span></td>
+    `;
+    tr.addEventListener('click', () => toggleProducerDetail(tr, r.producer));
+    tbody.appendChild(tr);
+  });
+  document.getElementById('leaderboardCount').textContent = `${rows.length} producers`;
+}
+
+// Click producer → expand row with monthly + brand breakdown
+function toggleProducerDetail(tr, producerName) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('detail-row')) {
+    next.remove();
+    tr.classList.remove('expanded');
+    return;
+  }
+  // Close all other expanded rows
+  document.querySelectorAll('tr.detail-row').forEach(d => d.remove());
+  document.querySelectorAll('tr.producer-row.expanded').forEach(t => t.classList.remove('expanded'));
+
+  tr.classList.add('expanded');
+  const detail = document.createElement('tr');
+  detail.className = 'detail-row';
+  detail.innerHTML = `<td colspan="12">${buildProducerDetailHtml(producerName)}</td>`;
+  tr.parentNode.insertBefore(detail, tr.nextSibling);
+}
+
+function buildProducerDetailHtml(producer) {
+  // Filter rawData by producer (respect current brand/channel filters but ignore month filter)
+  const brandFilter = document.getElementById('filterBrand').value;
+  const channelFilter = document.getElementById('filterChannel').value;
+  const prodData = rawData.filter(r =>
+    r.producer === producer &&
+    (!brandFilter || r.brand === brandFilter) &&
+    (!channelFilter || r.channel === channelFilter)
+  );
+
+  // Monthly breakdown
+  const byMonth = {};
+  prodData.forEach(r => {
+    if (!byMonth[r.ym]) byMonth[r.ym] = { sessions: 0, hours: 0, gmv: 0, orders: 0, ctrSum: 0, ctrN: 0, coRSum: 0, coRN: 0 };
+    const m = byMonth[r.ym];
+    m.sessions++; m.hours += r.dur; m.gmv += r.gmv; m.orders += r.orders;
+    if (r.ctr > 0) { m.ctrSum += r.ctr; m.ctrN++; }
+    if (r.coR > 0) { m.coRSum += r.coR; m.coRN++; }
+  });
+  const sortedMonths = Object.keys(byMonth).sort();
+
+  // Brand breakdown
+  const byBrand = {};
+  prodData.forEach(r => {
+    if (!byBrand[r.brand]) byBrand[r.brand] = { sessions: 0, hours: 0, gmv: 0 };
+    const b = byBrand[r.brand];
+    b.sessions++; b.hours += r.dur; b.gmv += r.gmv;
+  });
+  const sortedBrands = Object.entries(byBrand).sort((a, b) => b[1].gmv - a[1].gmv);
+
+  const monthRows = sortedMonths.map(m => {
+    const v = byMonth[m];
+    const gmvHr = v.hours > 0 ? v.gmv / v.hours : 0;
+    const ctr = v.ctrN > 0 ? v.ctrSum / v.ctrN : 0;
+    const coR = v.coRN > 0 ? v.coRSum / v.coRN : 0;
+    return `<tr>
+      <td><strong>${fmtMonthLabel(m)}</strong></td>
+      <td class="num">${v.sessions}</td>
+      <td class="num">${v.hours.toFixed(1)}</td>
+      <td class="num">฿${fmtMoney(v.gmv)}</td>
+      <td class="num">฿${fmtMoney(gmvHr)}</td>
+      <td class="num">${(ctr * 100).toFixed(2)}%</td>
+      <td class="num">${(coR * 100).toFixed(2)}%</td>
+      <td class="num">${Math.round(v.orders)}</td>
+    </tr>`;
+  }).join('');
+
+  const brandRows = sortedBrands.map(([b, v]) => {
+    const gmvHr = v.hours > 0 ? v.gmv / v.hours : 0;
+    return `<tr>
+      <td><strong>${b}</strong></td>
+      <td class="num">${v.sessions}</td>
+      <td class="num">${v.hours.toFixed(1)}</td>
+      <td class="num">฿${fmtMoney(v.gmv)}</td>
+      <td class="num">฿${fmtMoney(gmvHr)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>📅 ${producer} — Monthly Breakdown</h4>
+        <table style="width:100%">
+          <thead><tr>
+            <th>Month</th><th class="num">Sess</th><th class="num">Hrs</th>
+            <th class="num">GMV</th><th class="num">GMV/Hr</th>
+            <th class="num">CTR</th><th class="num">Co_R</th><th class="num">Orders</th>
+          </tr></thead>
+          <tbody>${monthRows}</tbody>
+        </table>
+      </div>
+      <div class="detail-block">
+        <h4>🏷️ ${producer} — Brand Breakdown (sorted by GMV)</h4>
+        <table style="width:100%">
+          <thead><tr>
+            <th>Brand</th><th class="num">Sess</th><th class="num">Hrs</th>
+            <th class="num">GMV</th><th class="num">GMV/Hr</th>
+          </tr></thead>
+          <tbody>${brandRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// Format money: ฿1,234,567 or ฿1.23M
+function fmtMoney(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return Math.round(n).toLocaleString();
+}
+
+// Sort handlers
+document.querySelectorAll('#leaderboardTable th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortState.key === key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    else { sortState.key = key; sortState.dir = key === 'producer' ? 'asc' : 'desc'; }
+    renderLeaderboard(getFilteredData());
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  HEATMAP
+// ═══════════════════════════════════════════════════════════════
+function renderHeatmap() {
+  // Producer × Month heatmap (GMV/Hr) — last 6 months, ignoring month filter
+  const allMonths = [...new Set(rawData.map(r => r.ym))].sort().slice(-6);
+  const producerFilter = document.getElementById('filterProducer').value;
+  const brandFilter = document.getElementById('filterBrand').value;
+  const channelFilter = document.getElementById('filterChannel').value;
+
+  const filteredData = rawData.filter(r =>
+    (!producerFilter || r.producer === producerFilter) &&
+    (!brandFilter || r.brand === brandFilter) &&
+    (!channelFilter || r.channel === channelFilter)
+  );
+
+  // Producer × Month
+  const matrix = {};
+  filteredData.forEach(r => {
+    if (!allMonths.includes(r.ym)) return;
+    if (!matrix[r.producer]) matrix[r.producer] = {};
+    if (!matrix[r.producer][r.ym]) matrix[r.producer][r.ym] = { gmv: 0, hrs: 0 };
+    matrix[r.producer][r.ym].gmv += r.gmv;
+    matrix[r.producer][r.ym].hrs += r.dur;
+  });
+
+  // Compute all values for percentile calc
+  const allVals = [];
+  Object.values(matrix).forEach(m => Object.values(m).forEach(v => {
+    if (v.hrs > 0) allVals.push(v.gmv / v.hrs);
+  }));
+  allVals.sort((a, b) => a - b);
+  const p50 = allVals[Math.floor(allVals.length * 0.5)] || 0;
+  const p75 = allVals[Math.floor(allVals.length * 0.75)] || 0;
+  const p90 = allVals[Math.floor(allVals.length * 0.9)] || 0;
+
+  // Sort producers by total GMV across these months
+  const producers = Object.keys(matrix).sort((a, b) => {
+    const ta = Object.values(matrix[a]).reduce((s, v) => s + v.gmv, 0);
+    const tb = Object.values(matrix[b]).reduce((s, v) => s + v.gmv, 0);
+    return tb - ta;
+  });
+
+  // Render header
+  const header = document.getElementById('heatmapHeader');
+  header.innerHTML = '<th>Producer</th>' + allMonths.map(m => `<th class="num">${fmtMonthLabel(m)}</th>`).join('');
+
+  // Render body
+  const body = document.getElementById('heatmapBody');
+  body.innerHTML = '';
+  producers.forEach(p => {
+    let html = `<td><strong>${p}</strong></td>`;
+    allMonths.forEach(m => {
+      const v = matrix[p][m];
+      if (!v || v.hrs === 0) {
+        html += '<td class="heatmap-cell h-na">—</td>';
+      } else {
+        const val = v.gmv / v.hrs;
+        const cls = val >= p90 ? 'h-90' : val >= p75 ? 'h-75' : val >= p50 ? 'h-50' : val > 0 ? 'h-25' : 'h-0';
+        html += `<td class="heatmap-cell ${cls}">฿${Math.round(val / 1000).toLocaleString()}K</td>`;
+      }
+    });
+    const tr = document.createElement('tr');
+    tr.innerHTML = html;
+    body.appendChild(tr);
+  });
+}
+</script>
+</body>
+</html>

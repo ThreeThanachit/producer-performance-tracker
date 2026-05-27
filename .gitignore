@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Data files (sensitive — contain real business data)
+*.xlsx
+*.xls
+*.csv
+*.pptx
+*.ppt
+
+# Legacy code backups (large, redundant with .js source)
+*.rtf
+
+# Node / Playwright (if local testing)
+node_modules/
+package-lock.json
+package.json
+
+# Logs / temp
+*.log
+*.tmp
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Apps Script local clone (clasp)
+.clasp.json
+.clasprc.json
+
+# Mockup output (testing)
+/tmp/
+screenshots/
