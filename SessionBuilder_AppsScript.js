@@ -1416,6 +1416,16 @@ function refreshTodayView() {
     return d.getTime() === today.getTime();
   });
 
+  // ✨ Sort: Time asc → Producer asc (Date เป็น today อยู่แล้ว)
+  todayRows.sort(function(a, b) {
+    var timeA = (a[1] || '').toString();
+    var timeB = (b[1] || '').toString();
+    if (timeA !== timeB) return timeA < timeB ? -1 : 1;
+    var prodA = (a[2] || '').toString();
+    var prodB = (b[2] || '').toString();
+    return prodA < prodB ? -1 : prodA > prodB ? 1 : 0;
+  });
+
   var sheet = ss.getSheetByName(TODAY_VIEW_NAME) || ss.insertSheet(TODAY_VIEW_NAME);
   sheetClearAll(sheet);
 
@@ -1787,6 +1797,19 @@ function refreshOverdueView() {
     var prod = (row[2] || '').toString().trim();
     if (EXCLUDED_PRODUCERS.indexOf(prod) > -1) return false; // ไม่แสดง TBCP/Cancel/Brand
     return (row[23] || '').toString().indexOf('Overdue') > -1;
+  });
+
+  // ✨ Sort: Date asc → Time asc → Producer asc (เหมือน Master Log)
+  overdueRows.sort(function(a, b) {
+    var dateA = a[0] instanceof Date ? a[0].getTime() : 0;
+    var dateB = b[0] instanceof Date ? b[0].getTime() : 0;
+    if (dateA !== dateB) return dateA - dateB;
+    var timeA = (a[1] || '').toString();
+    var timeB = (b[1] || '').toString();
+    if (timeA !== timeB) return timeA < timeB ? -1 : 1;
+    var prodA = (a[2] || '').toString();
+    var prodB = (b[2] || '').toString();
+    return prodA < prodB ? -1 : prodA > prodB ? 1 : 0;
   });
 
   var sheet = ss.getSheetByName(OVERDUE_VIEW_NAME) || ss.insertSheet(OVERDUE_VIEW_NAME);
