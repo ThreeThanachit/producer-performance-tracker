@@ -53,6 +53,7 @@ function onOpen() {
     .addItem('🔄 Refresh Today & Overdue views',         'refreshViews')
     .addItem('💾 Sync Today → Master Log',               'syncTodayToMasterLog')
     .addItem('🧹 Dedup Master Log (ลบ session ซ้ำ)',     'dedupMasterLog')
+    .addItem('🔢 Sort Master Log (Date → Time)',         'sortMasterLog')
     .addSeparator()
     .addItem('📊 Build Weekly Dashboard',    'buildWeeklyDashboard')
     .addItem('📅 Build Monthly Dashboard',   'buildMonthlyDashboard')
@@ -626,6 +627,48 @@ function dedupMasterLog() {
     'Rows ที่ลบ: ' + rowsDeleted + '\n\n' +
     '📦 Backup: Tab "' + backupName + '"\n' +
     '(ลบ tab นี้เมื่อยืนยันว่าทุกอย่างปกติ)'
+  );
+}
+
+
+// ============================================================
+//  SORT MASTER LOG
+//  เรียง ML ตาม Date (asc) → Time (asc) → Producer (asc)
+//  ใช้ Range.sort() ของ GAS — auto-update formula relative refs + preserve
+//  data validation + conditional formatting
+// ============================================================
+function sortMasterLog() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ml = ss.getSheetByName(MASTER_LOG_NAME);
+  if (!ml) { uiAlert('❌ ไม่พบ Master Log'); return; }
+
+  var lastRow = ml.getLastRow();
+  var DATA_START = 3;
+  if (lastRow < DATA_START) { uiAlert('⚠️ ML ว่าง'); return; }
+
+  var nRows = lastRow - DATA_START + 1;
+  var nCols = 24; // A-X (Date ... Status)
+
+  // 1. ลบ filter ก่อน sort (filter อาจ block sort)
+  var filter = ml.getFilter();
+  if (filter) filter.remove();
+
+  // 2. Sort: Date asc → Time asc → Producer asc
+  // (Time เป็น string "08:00-10:00" → sort lexicographically ใช้ได้
+  //  เพราะ zero-padded hours)
+  ml.getRange(DATA_START, 1, nRows, nCols).sort([
+    { column: 1, ascending: true },  // Date
+    { column: 2, ascending: true },  // Time
+    { column: 3, ascending: true }   // Producer
+  ]);
+
+  // 3. สร้าง filter ใหม่
+  ml.getRange(2, 1, nRows + 1, nCols).createFilter();
+
+  uiAlert(
+    '✅ Master Log sorted\n' +
+    'Order: Date → Time → Producer\n' +
+    'Rows: ' + nRows
   );
 }
 
@@ -1326,13 +1369,22 @@ function _appendNewSessionsToMasterLog(sheet, sessionRows, sc) {
     .setRanges([checkRange]).build();
   sheet.setConditionalFormatRules([cfPass, cfFail]);
 
-  // Recreate filter ครอบ range ที่ขยายแล้ว
+  // ✨ Auto-sort หลัง append — ML เรียง Date → Time → Producer เสมอ
+  // ลบ filter ก่อน sort, แล้วสร้างใหม่
+  var filter2 = sheet.getFilter();
+  if (filter2) filter2.remove();
+  sheet.getRange(DATA_START, 1, totalDataRows, C.TOTAL).sort([
+    { column: 1, ascending: true },
+    { column: 2, ascending: true },
+    { column: 3, ascending: true }
+  ]);
   sheet.getRange(2, 1, totalDataRows + 1, C.TOTAL).createFilter();
 
   uiAlert(
     '✅ Master Log อัปเดต (APPEND-ONLY — ไม่ล้างข้อมูลเดิม)\n' +
     'Session ใหม่ที่ append: ' + nNew + '\n' +
-    'Session เดิม preserve: ' + existingCount + ' (100%)'
+    'Session เดิม preserve: ' + existingCount + ' (100%)\n' +
+    'Sorted: Date → Time → Producer'
   );
 }
 
