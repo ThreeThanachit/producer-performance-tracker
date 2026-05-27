@@ -53,6 +53,7 @@ function onOpen() {
     .addItem('🔄 Refresh Today & Overdue views',         'refreshViews')
     .addItem('💾 Sync Today → Master Log',               'syncTodayToMasterLog')
     .addItem('👥 Setup Producer → Senior assignments',   'buildProducerAssignments')
+    .addItem('🧹 Dedup Master Log (ลบ session ซ้ำ)',     'dedupMasterLog')
     .addSeparator()
     .addItem('📊 Build Weekly Dashboard',    'buildWeeklyDashboard')
     .addItem('📅 Build Monthly Dashboard',   'buildMonthlyDashboard')
@@ -589,6 +590,103 @@ function buildProducerAssignments() {
     '✅ เพิ่ม Producer ใน Tab "' + ASSIGNMENTS_TAB + '":\n' +
     missing.length + ' producer ใหม่ — เลือก Senior ใน column B\n' +
     'หลังเลือกครบ → session ใหม่จะ auto-assign Senior อัตโนมัติ'
+  );
+}
+
+
+// ============================================================
+//  DEDUP MASTER LOG
+//
+//  สาเหตุของ dup: buildMasterLog เก่า (ก่อน append-only fix) clear+rebuild
+//                 แต่ preserve logic fail (locale issue) → สะสม dup ทุกครั้งรัน
+//
+//  Logic:
+//    1. Group rows by key (Date|Time|Producer|Brand)
+//    2. สำหรับแต่ละ group คำนวณ "score" = จำนวน non-N/A cell ใน col E-U
+//    3. เก็บ row ที่ score สูงสุด (= data ครบที่สุด)
+//    4. ถ้า tie → เก็บ row index สูงสุด (= ล่าสุด)
+//    5. Delete row อื่นๆ จากล่างขึ้นบน (ไม่ให้ index shift)
+//
+//  Safety: snapshot ML ไปที่ tab "Master Log Backup [timestamp]" ก่อนลบ
+// ============================================================
+function dedupMasterLog() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ml = ss.getSheetByName(MASTER_LOG_NAME);
+  if (!ml) { uiAlert('❌ ไม่พบ Master Log'); return; }
+
+  var data = ml.getDataRange().getValues();
+  if (data.length < 3) { uiAlert('✅ ML ว่าง — ไม่มี dup ให้ลบ'); return; }
+
+  // ── Step 1: group by key, score each row
+  var groups = {}; // key → [{ rowIdx (1-indexed), score }]
+  for (var i = 2; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    var d = row[0] instanceof Date ? row[0] : new Date(row[0].toString());
+    var key = formatDate(d.getDate(), d.getMonth() + 1, d.getFullYear())
+            + '|' + row[1] + '|' + row[2] + '|' + row[3];
+
+    // Score = count non-N/A non-empty in col idx 4-20 (Senior + 16 items)
+    var score = 0;
+    for (var c = 4; c <= 20; c++) {
+      var v = (row[c] || '').toString().trim();
+      if (v && v !== 'N/A') score++;
+    }
+
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({ rowIdx: i + 1, score: score });
+  }
+
+  // ── Step 2: identify rows to delete
+  var toDelete = [];
+  var unique = 0, dupGroups = 0, rowsDeleted = 0;
+  Object.keys(groups).forEach(function(key) {
+    var rows = groups[key];
+    unique++;
+    if (rows.length === 1) return;
+    dupGroups++;
+
+    // Sort: highest score first, then highest rowIdx (latest)
+    rows.sort(function(a, b) {
+      if (a.score !== b.score) return b.score - a.score;
+      return b.rowIdx - a.rowIdx;
+    });
+
+    // Keep rows[0], delete the rest
+    for (var i = 1; i < rows.length; i++) {
+      toDelete.push(rows[i].rowIdx);
+      rowsDeleted++;
+    }
+  });
+
+  if (toDelete.length === 0) {
+    uiAlert('✅ ไม่มี duplicate ใน Master Log — ' + unique + ' unique sessions');
+    return;
+  }
+
+  // ── Step 3: SAFETY — backup ML to timestamped tab
+  var tz = Session.getScriptTimeZone();
+  var ts = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd_HHmmss');
+  var backupName = 'ML_Backup_' + ts;
+  var existing = ss.getSheetByName(backupName);
+  if (existing) ss.deleteSheet(existing);
+  var backup = ml.copyTo(ss);
+  backup.setName(backupName);
+  ss.setActiveSheet(ml); // กลับมาที่ ML
+
+  // ── Step 4: delete rows bottom-up (กัน index shift)
+  toDelete.sort(function(a, b) { return b - a; });
+  toDelete.forEach(function(rowIdx) {
+    ml.deleteRow(rowIdx);
+  });
+
+  uiAlert(
+    '✅ Dedup เสร็จ\n\n' +
+    'Unique sessions: ' + unique + '\n' +
+    'Sessions ที่มี dup: ' + dupGroups + '\n' +
+    'Rows ที่ลบ: ' + rowsDeleted + '\n\n' +
+    '📦 Backup: Tab "' + backupName + '"\n' +
+    '(ลบ tab นี้เมื่อยืนยันว่าทุกอย่างปกติ)'
   );
 }
 
